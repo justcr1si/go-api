@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"case/config"
+	_ "case/docs"
 	"case/handlers"
 	"case/repositories"
 	"case/services"

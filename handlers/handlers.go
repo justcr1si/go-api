@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"case/models"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -20,7 +21,8 @@ func NewSongHandler(service *services.SongService, log *logrus.Logger) *SongHand
 	return &SongHandler{service: service, log: log}
 }
 
-// GetSongs @Summary Get a list of songs
+// GetSongs
+// @Summary Get a list of songs
 // @Description Get a list of songs with optional filtering and pagination
 // @Tags songs
 // @Accept json
@@ -29,8 +31,8 @@ func NewSongHandler(service *services.SongService, log *logrus.Logger) *SongHand
 // @Param song query string false "Filter by song name"
 // @Param page query int false "Page number" default(1)
 // @Param limit query int false "Number of items per page" default(10)
-// @Success 200 {object} gin.H "List of songs"
-// @Failure 500 {object} gin.H "Failed to get songs"
+// @Success 200 {object} models.SongListResponse "List of songs"
+// @Failure 500 {object} models.ErrorResponse "Failed to get songs"
 // @Router /songs [get]
 func (h *SongHandler) GetSongs(c *gin.Context) {
 	filter := make(map[string]string)
@@ -43,20 +45,20 @@ func (h *SongHandler) GetSongs(c *gin.Context) {
 
 	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
 	if err != nil || page < 1 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid page number"})
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: fmt.Sprintf("page must be a positive integer. Got %v", page)})
 		return
 	}
 
 	limit, err := strconv.Atoi(c.DefaultQuery("limit", "10"))
 	if err != nil || limit < 1 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid limit"})
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid limit number"})
 		return
 	}
 
 	songs, err := h.service.GetSongs(filter, page, limit)
 	if err != nil {
 		h.log.Errorf("Failed to get songs: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get songs"})
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to get songs"})
 		return
 	}
 
@@ -64,96 +66,99 @@ func (h *SongHandler) GetSongs(c *gin.Context) {
 		"count": len(songs),
 	}).Info("Songs retrieved successfully")
 
-	c.JSON(http.StatusOK, gin.H{"songs": songs})
+	c.JSON(http.StatusOK, models.SongListResponse{Songs: models.ToSongResponseList(songs)})
 }
 
-// GetSongLyrics @Summary Get a lyrics of song
+// GetSongLyrics
+// @Summary Get a lyrics of song
 // @Description Get a lyrics of song by its song's id
 // @Tags songs
 // @Accept json
 // @Produce json
-// @Param song query string false "Filter by song name"
+// @Param id path int true "Song ID"
 // @Param page query int false "Page number" default(1)
 // @Param limit query int false "Number of items per page" default(10)
-// @Success 200 {object} gin.H "Lyrics of song"
-// @Failure 500 {object} gin.H "Failed to get lyrics of the song"
-// @Router /songs [get]
+// @Success 200 {object} models.MessageResponse "Lyrics of song"
+// @Failure 500 {object} models.ErrorResponse "Failed to get lyrics of the song"
+// @Router /songs/{id}/lyrics [get]
 func (h *SongHandler) GetSongLyrics(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid song ID"})
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid id"})
 		return
 	}
 
 	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
 	if err != nil || page < 1 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid page number"})
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid page number"})
 		return
 	}
 
 	limit, err := strconv.Atoi(c.DefaultQuery("limit", "10"))
 	if err != nil || limit < 1 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid limit"})
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: fmt.Sprintf("Invalid limit %d", limit)})
 		return
 	}
 
 	lyrics, err := h.service.GetSongLyrics(id, page, limit)
 	if err != nil {
 		h.log.Errorf("Failed to get lyrics: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get lyrics"})
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to get lyrics"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"lyrics": lyrics})
+	c.JSON(http.StatusOK, models.MessageResponse{Message: lyrics})
 }
 
-// DeleteSong @Summary Delete a song
+// DeleteSong
+// @Summary Delete a song
 // @Description Delete a song by ID
 // @Tags songs
 // @Accept json
 // @Produce json
 // @Param id path int true "Song ID"
-// @Success 200 {object} gin.H "Song deleted"
-// @Failure 400 {object} gin.H "Invalid ID"
-// @Failure 500 {object} gin.H "Failed to delete song"
+// @Success 200 {object} models.MessageResponse "Song deleted"
+// @Failure 400 {object} models.ErrorResponse "Invalid ID"
+// @Failure 500 {object} models.ErrorResponse "Failed to delete song"
 // @Router /songs/{id} [delete]
 func (h *SongHandler) DeleteSong(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid id"})
 		return
 	}
 
 	err = h.service.DeleteSong(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to delete song"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Song deleted"})
+	c.JSON(http.StatusOK, models.MessageResponse{Message: "song deleted"})
 }
 
-// UpdateSong @Summary Update a song
+// UpdateSong
+// @Summary Update a song
 // @Description Update an existing song by ID
 // @Tags songs
 // @Accept json
 // @Produce json
 // @Param id path int true "Song ID"
 // @Param song body models.Song true "Updated song data"
-// @Success 200 {object} gin.H "Song updated"
-// @Failure 400 {object} gin.H "Invalid request body or ID"
-// @Failure 500 {object} gin.H "Failed to update song"
+// @Success 200 {object} models.SongResponse "Song updated"
+// @Failure 400 {object} models.ErrorResponse "Invalid request body or ID"
+// @Failure 500 {object} models.ErrorResponse "Failed to update song"
 // @Router /songs/{id} [put]
 func (h *SongHandler) UpdateSong(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid song ID"})
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid id"})
 		return
 	}
 
 	var song models.Song
 	if err := c.ShouldBindJSON(&song); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid song"})
 		return
 	}
 	song.ID = id
@@ -166,32 +171,42 @@ func (h *SongHandler) UpdateSong(c *gin.Context) {
 		h.log.WithFields(logrus.Fields{
 			"error": err,
 		}).Error("Failed to update song")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update song"})
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to update song"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Song updated", "song": song})
+	songResponse := models.ToSongResponse(song)
+
+	c.JSON(http.StatusOK, models.SongResponse{
+		ID:          songResponse.ID,
+		Group:       songResponse.Group,
+		Song:        songResponse.Song,
+		ReleaseDate: songResponse.ReleaseDate,
+		Text:        songResponse.Text,
+		Link:        songResponse.Link,
+	})
 }
 
-// AddSong @Summary Add a new song
+// AddSong
+// @Summary Add a new song
 // @Description Add a new song to the database
 // @Tags songs
 // @Accept json
 // @Produce json
 // @Param song body models.Song true "Song data"
-// @Success 200 {object} gin.H "Song added"
-// @Failure 400 {object} gin.H "Invalid request body"
-// @Failure 500 {object} gin.H "Failed to add song"
+// @Success 200 {object} models.SongResponse "Song added"
+// @Failure 400 {object} models.ErrorResponse "Invalid request body"
+// @Failure 500 {object} models.ErrorResponse "Failed to add song"
 // @Router /songs [post]
 func (h *SongHandler) AddSong(c *gin.Context) {
 	var song models.Song
 	if err := c.ShouldBindJSON(&song); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid song"})
 		return
 	}
 
 	if song.Group == "" || song.Song == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Fields 'group' and 'song' are required"})
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid song"})
 		return
 	}
 
@@ -209,9 +224,18 @@ func (h *SongHandler) AddSong(c *gin.Context) {
 		h.log.WithFields(logrus.Fields{
 			"error": err,
 		}).Error("Failed to add song")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add song"})
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to add song"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Song added", "song": song})
+	songResponse := models.ToSongResponse(song)
+
+	c.JSON(http.StatusOK, models.SongResponse{
+		ID:          songResponse.ID,
+		Group:       songResponse.Group,
+		Song:        songResponse.Song,
+		ReleaseDate: songResponse.ReleaseDate,
+		Text:        songResponse.Text,
+		Link:        songResponse.Link,
+	})
 }
