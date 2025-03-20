@@ -3,17 +3,18 @@ package repositories
 import (
 	"case/models"
 	"database/sql"
-	"log"
+	"github.com/sirupsen/logrus"
 	"strconv"
 	"strings"
 )
 
 type SongRepository struct {
-	db *sql.DB
+	db  *sql.DB
+	log *logrus.Logger
 }
 
-func NewSongRepository(db *sql.DB) *SongRepository {
-	return &SongRepository{db: db}
+func NewSongRepository(db *sql.DB, log *logrus.Logger) *SongRepository {
+	return &SongRepository{db: db, log: log}
 }
 
 func (r *SongRepository) GetSongs(filter map[string]string, page, limit int) ([]models.Song, error) {
@@ -35,6 +36,12 @@ func (r *SongRepository) GetSongs(filter map[string]string, page, limit int) ([]
 	query += " OFFSET $" + strconv.Itoa(len(args)+1)
 	args = append(args, (page-1)*limit)
 
+	r.log.WithFields(logrus.Fields{
+		"query": query,
+		"group": filter["group"],
+		"song":  filter["song"],
+	}).Debug("Executing SQL query")
+
 	rows, err := r.db.Query(query, args...)
 	if err != nil {
 		return nil, err
@@ -42,7 +49,9 @@ func (r *SongRepository) GetSongs(filter map[string]string, page, limit int) ([]
 	defer func(rows *sql.Rows) {
 		err := rows.Close()
 		if err != nil {
-			log.Fatal(err)
+			r.log.WithFields(logrus.Fields{
+				"error": err,
+			}).Error("Error closing rows")
 		}
 	}(rows)
 
@@ -65,7 +74,13 @@ func (r *SongRepository) GetSongs(filter map[string]string, page, limit int) ([]
 func (r *SongRepository) GetSongLyrics(id, page, limit int) (string, error) {
 	var text string
 
-	err := r.db.QueryRow("SELECT text FROM songs WHERE id=$1", id).Scan(&text)
+	query := "SELECT text FROM songs WHERE id=$1"
+
+	r.log.WithFields(logrus.Fields{
+		"query": query,
+	}).Debug("Executing SQL query")
+
+	err := r.db.QueryRow(query, id).Scan(&text)
 	if err != nil {
 		return "", err
 	}
@@ -84,7 +99,11 @@ func (r *SongRepository) GetSongLyrics(id, page, limit int) (string, error) {
 }
 
 func (r *SongRepository) DeleteSong(id int) error {
-	_, err := r.db.Exec("DELETE FROM songs WHERE id = $1", id)
+	query := "DELETE FROM songs WHERE id = $1"
+	r.log.WithFields(logrus.Fields{
+		"query": query,
+	}).Debug("Executing SQL query")
+	_, err := r.db.Exec(query, id)
 	return err
 }
 
@@ -93,6 +112,9 @@ func (r *SongRepository) UpdateSong(song *models.Song) error {
 SET "group" = $1, song = $2, release_date = $3, text = $4, link = $5
 WHERE id = $6
 `
+	r.log.WithFields(logrus.Fields{
+		"query": query,
+	}).Debug("Executing SQL query")
 	_, err := r.db.Exec(query, song.Group, song.Song, song.ReleaseDate, song.Text, song.Link, song.ID)
 	return err
 }
@@ -103,5 +125,9 @@ func (r *SongRepository) AddSong(song *models.Song) error {
         VALUES ($1, $2, $3, $4, $5)
         RETURNING id
     `
+	r.log.WithFields(logrus.Fields{
+		"query": query,
+	}).Debug("Executing SQL query")
+
 	return r.db.QueryRow(query, song.Group, song.Song, song.ReleaseDate, song.Text, song.Link).Scan(&song.ID)
 }

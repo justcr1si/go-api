@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	swaggerFiles "github.com/swaggo/files"
 	_ "log"
 	"os"
 
@@ -12,6 +13,9 @@ import (
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 	"github.com/sirupsen/logrus"
+
+	_ "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func main() {
@@ -20,10 +24,7 @@ func main() {
 	log := logrus.New()
 	log.SetOutput(os.Stdout)
 	log.SetLevel(logrus.DebugLevel)
-
-	//psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
-	//	"password=%s dbname=%s sslmode=disable",
-	//	host, port, user, password, dbname)
+	log.SetFormatter(&logrus.JSONFormatter{})
 
 	db, err := sql.Open("postgres", cfg.DatabaseURL)
 	if err != nil {
@@ -41,13 +42,18 @@ func main() {
 	}
 	log.Info("Successfully connected to the database")
 
-	repo := repositories.NewSongRepository(db)
+	repo := repositories.NewSongRepository(db, log)
 
 	service := services.NewSongService(repo, cfg.ApiUrl)
 
 	handler := handlers.NewSongHandler(service, log)
 
 	r := gin.Default()
+
+	// SWAGGER
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
+	// Наши маршруты
 	r.GET("/songs", handler.GetSongs)
 	r.GET("/songs/:id/lyrics", handler.GetSongLyrics)
 	r.DELETE("/songs/:id", handler.DeleteSong)

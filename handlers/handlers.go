@@ -20,6 +20,18 @@ func NewSongHandler(service *services.SongService, log *logrus.Logger) *SongHand
 	return &SongHandler{service: service, log: log}
 }
 
+// GetSongs @Summary Get a list of songs
+// @Description Get a list of songs with optional filtering and pagination
+// @Tags songs
+// @Accept json
+// @Produce json
+// @Param group query string false "Filter by group"
+// @Param song query string false "Filter by song name"
+// @Param page query int false "Page number" default(1)
+// @Param limit query int false "Number of items per page" default(10)
+// @Success 200 {object} gin.H "List of songs"
+// @Failure 500 {object} gin.H "Failed to get songs"
+// @Router /songs [get]
 func (h *SongHandler) GetSongs(c *gin.Context) {
 	filter := make(map[string]string)
 	if group := c.Query("group"); group != "" {
@@ -48,9 +60,24 @@ func (h *SongHandler) GetSongs(c *gin.Context) {
 		return
 	}
 
+	h.log.WithFields(logrus.Fields{
+		"count": len(songs),
+	}).Info("Songs retrieved successfully")
+
 	c.JSON(http.StatusOK, gin.H{"songs": songs})
 }
 
+// GetSongLyrics @Summary Get a lyrics of song
+// @Description Get a lyrics of song by its song's id
+// @Tags songs
+// @Accept json
+// @Produce json
+// @Param song query string false "Filter by song name"
+// @Param page query int false "Page number" default(1)
+// @Param limit query int false "Number of items per page" default(10)
+// @Success 200 {object} gin.H "Lyrics of song"
+// @Failure 500 {object} gin.H "Failed to get lyrics of the song"
+// @Router /songs [get]
 func (h *SongHandler) GetSongLyrics(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -80,6 +107,16 @@ func (h *SongHandler) GetSongLyrics(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"lyrics": lyrics})
 }
 
+// DeleteSong @Summary Delete a song
+// @Description Delete a song by ID
+// @Tags songs
+// @Accept json
+// @Produce json
+// @Param id path int true "Song ID"
+// @Success 200 {object} gin.H "Song deleted"
+// @Failure 400 {object} gin.H "Invalid ID"
+// @Failure 500 {object} gin.H "Failed to delete song"
+// @Router /songs/{id} [delete]
 func (h *SongHandler) DeleteSong(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -96,6 +133,17 @@ func (h *SongHandler) DeleteSong(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Song deleted"})
 }
 
+// UpdateSong @Summary Update a song
+// @Description Update an existing song by ID
+// @Tags songs
+// @Accept json
+// @Produce json
+// @Param id path int true "Song ID"
+// @Param song body models.Song true "Updated song data"
+// @Success 200 {object} gin.H "Song updated"
+// @Failure 400 {object} gin.H "Invalid request body or ID"
+// @Failure 500 {object} gin.H "Failed to update song"
+// @Router /songs/{id} [put]
 func (h *SongHandler) UpdateSong(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -115,7 +163,9 @@ func (h *SongHandler) UpdateSong(c *gin.Context) {
 	}
 
 	if err := h.service.UpdateSong(&song); err != nil {
-		h.log.Errorf("Failed to update song: %v", err)
+		h.log.WithFields(logrus.Fields{
+			"error": err,
+		}).Error("Failed to update song")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update song"})
 		return
 	}
@@ -123,6 +173,16 @@ func (h *SongHandler) UpdateSong(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Song updated", "song": song})
 }
 
+// AddSong @Summary Add a new song
+// @Description Add a new song to the database
+// @Tags songs
+// @Accept json
+// @Produce json
+// @Param song body models.Song true "Song data"
+// @Success 200 {object} gin.H "Song added"
+// @Failure 400 {object} gin.H "Invalid request body"
+// @Failure 500 {object} gin.H "Failed to add song"
+// @Router /songs [post]
 func (h *SongHandler) AddSong(c *gin.Context) {
 	var song models.Song
 	if err := c.ShouldBindJSON(&song); err != nil {
@@ -146,7 +206,9 @@ func (h *SongHandler) AddSong(c *gin.Context) {
 	}
 
 	if err := h.service.AddSong(&song); err != nil {
-		h.log.Errorf("Failed to add song: %v", err)
+		h.log.WithFields(logrus.Fields{
+			"error": err,
+		}).Error("Failed to add song")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add song"})
 		return
 	}
